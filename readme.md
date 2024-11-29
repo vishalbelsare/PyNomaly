@@ -2,12 +2,14 @@
 
 PyNomaly is a Python 3 implementation of LoOP (Local Outlier Probabilities).
 LoOP is a local density based outlier detection method by Kriegel, Kröger, Schubert, and Zimek which provides outlier
-scores in the range of [0,1] that are directly interpretable as the probability of a sample being an outlier.
+scores in the range of [0,1] that are directly interpretable as the probability of a sample being an outlier. 
+
+PyNomaly is a core library of [deepchecks](https://github.com/deepchecks/deepchecks) and [pysad](https://github.com/selimfirat/pysad). 
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![PyPi](https://img.shields.io/badge/pypi-0.3.3-blue.svg)](https://pypi.python.org/pypi/PyNomaly/0.3.3)
-![](https://img.shields.io/pypi/dm/PyNomaly.svg?logoColor=blue)
-[![Build Status](https://travis-ci.org/vc1492a/PyNomaly.svg?branch=main)](https://travis-ci.org/vc1492a/PyNomaly)
+[![PyPi](https://img.shields.io/badge/pypi-0.3.4-blue.svg)](https://pypi.python.org/pypi/PyNomaly/0.3.4)
+[![Downloads](https://img.shields.io/pypi/dm/PyNomaly.svg?logoColor=blue)](https://pypistats.org/packages/pynomaly)
+![Tests](https://github.com/vc1492a/PyNomaly/actions/workflows/tests.yml/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/vc1492a/PyNomaly/badge.svg?branch=main)](https://coveralls.io/github/vc1492a/PyNomaly?branch=main)
 [![JOSS](http://joss.theoj.org/papers/f4d2cfe680768526da7c1f6a2c103266/status.svg)](http://joss.theoj.org/papers/f4d2cfe680768526da7c1f6a2c103266)
 
@@ -29,16 +31,6 @@ The authors' 2009 paper detailing LoOP's theory, formulation, and application is
 Ludwig-Maximilians University Munich - Institute for Informatics;
 [LoOP: Local Outlier Probabilities](http://www.dbs.ifi.lmu.de/Publikationen/Papers/LoOP1649.pdf).
 
-## PyNomaly Seeks Maintainers! :sparkles:
-
-Love using PyNomaly? Want to develop your open source software (OSS) experience and credentials? 
-
-PyNomaly is looking for maintainers! PyNomaly doesn't need much on a day to day basis, but needs some attention. 
-
-On the flip side, the sky is the limit... Have you seen [Mojo](https://docs.modular.com/mojo/notebooks/Matmul.html) and what it can do with matrix multiplication? Would definitely speed things up.  
-
-Interested? Send an email to [vc1492a@gmail.com](vc1492a@gmail.com). 
-
 ## Implementation
 
 This Python 3 implementation uses Numpy and the formulas outlined in
@@ -46,7 +38,7 @@ This Python 3 implementation uses Numpy and the formulas outlined in
 to calculate the Local Outlier Probability of each sample.
 
 ## Dependencies
-- Python 3.5 - 3.8
+- Python 3.6 - 3.13
 - numpy >= 1.16.3
 - python-utils >= 2.3.0
 - (optional) numba >= 0.45.1
@@ -63,6 +55,12 @@ First install the package from the Python Package Index:
 
 ```shell
 pip install PyNomaly # or pip3 install ... if you're using both Python 3 and 2.
+```
+
+Alternatively, you can use conda to install the package from conda-forge:
+
+```shell
+conda install conda-forge::pynomaly
 ```
 Then you can do something like this:
 
@@ -167,8 +165,7 @@ Now let's create two sets of Iris data for scoring; one with clustering and the 
 
 ```python
 # import the data and remove any non-numeric columns
-iris = pd.DataFrame(data('iris'))
-iris = pd.DataFrame(iris.drop('Species', 1))
+iris = pd.DataFrame(data('iris').drop(columns=['Species']))
 ```
 
 Next, let's cluster the data using DBSCAN and generate two sets of scores. On both cases, we will use the default
@@ -289,7 +286,12 @@ PyNomaly provides the ability to specify a distance matrix so that any
 distance metric can be used (a neighbor index matrix must also be provided).
 This can be useful when wanting to use a distance other than the euclidean.
 
+Note that in order to maintain alignment with the LoOP definition of closest neighbors, 
+an additional neighbor is added when using [scikit-learn's NearestNeighbors](https://scikit-learn.org/1.5/modules/neighbors.html) since `NearestNeighbors` 
+includes the point itself when calculating the cloest neighbors (whereas the LoOP method does not include distances to point itself). 
+
 ```python
+import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 data = np.array([
@@ -301,11 +303,18 @@ data = np.array([
     [421.5, 90.3, 50.0]
 ])
 
-neigh = NearestNeighbors(n_neighbors=3, metric='hamming')
+# Generate distance and neighbor matrices
+n_neighbors = 3 # the number of neighbors according to the LoOP definition 
+neigh = NearestNeighbors(n_neighbors=n_neighbors+1, metric='hamming')
 neigh.fit(data)
 d, idx = neigh.kneighbors(data, return_distance=True)
 
-m = loop.LocalOutlierProbability(distance_matrix=d, neighbor_matrix=idx, n_neighbors=3).fit()
+# Remove self-distances - you MUST do this to preserve the same results as intended by the definition of LoOP
+indices = np.delete(indices, 0, 1)
+distances = np.delete(distances, 0, 1)
+
+# Fit and return scores
+m = loop.LocalOutlierProbability(distance_matrix=d, neighbor_matrix=idx, n_neighbors=n_neighbors+1).fit()
 scores = m.local_outlier_probabilities
 ```
 
@@ -401,10 +410,15 @@ any changes to a branch which corresponds to an open issue. Hot fixes
 and bug fixes can be represented by branches with the prefix `fix/` versus 
 `feature/` for new capabilities or code improvements. Pull requests will 
 then be made from these branches into the repository's `dev` branch 
-prior to being pulled into `main`. Pull requests which are works in 
-progress or ready for merging should be indicated by their respective 
-prefixes ([WIP] and [MRG]). Pull requests with the [MRG] prefix will be 
-reviewed prior to being pulled into the `main` branch. 
+prior to being pulled into `main`. 
+
+### Commit Messages and Releases
+
+**Your commit messages are important** - here's why. 
+
+PyNomaly leverages [release-please](https://github.com/googleapis/release-please-action) to help automate the release process using the [Conventional Commits](https://www.conventionalcommits.org/) specification. When pull requests are opened to the `main` branch, release-please will collate the git commit messages and prepare an organized changelog and release notes. This process can be completed because of the Conventional Commits specification. 
+
+Conventional Commits provides an easy set of rules for creating an explicit commit history; which makes it easier to write automated tools on top of. This convention dovetails with SemVer, by describing the features, fixes, and breaking changes made in commit messages. You can check out examples [here](https://www.conventionalcommits.org/en/v1.0.0/#examples). Make a best effort to use the specification when contributing to Infactory code as it dramatically eases the documentation around releases and their features, breaking changes, bug fixes and documentation updates. 
 
 ### Tests
 When contributing, please ensure to run unit tests and add additional tests as 
